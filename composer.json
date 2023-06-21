@@ -2,6 +2,7 @@
     "name": "jobsys/approval-module",
     "description": "",
     "type": "laravel-module",
+    "license": "MIT",
     "authors": [
         {
             "name": "sinceow",
