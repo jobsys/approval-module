@@ -1,0 +1,24 @@
+{
+    "name": "jobsys/approval-module",
+    "description": "",
+    "type": "laravel-module",
+    "authors": [
+        {
+            "name": "sinceow",
+            "email": "sinceow@163.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Approval\\": ""
+        }
+    }
+}
