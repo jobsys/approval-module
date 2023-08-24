@@ -60,10 +60,7 @@ class ApprovalController extends BaseManagerController
 
     public function processItems(Request $request)
     {
-        $name = $request->input('name');
-        $pagination = ApprovalProcess::withCount(['nodes'])->when($name, function ($query) use ($name) {
-            return $query->where('name', 'like', "%{$name}%");
-        })->paginate();
+        $pagination = ApprovalProcess::withCount(['nodes'])->filterable()->paginate();
 
         log_access('查看审批流程列表');
 
