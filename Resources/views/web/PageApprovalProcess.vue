@@ -64,7 +64,7 @@
 		</a-card>
 	</NewbieModal>
 
-	<a-modal title="添加审批节点" v-model:visible="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
+	<a-modal title="添加审批节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
 		<a-form :model="state.currentNode" :label-col="{ span: 4 }" @finish="onAddNode">
 			<a-form-item label="审批节点名称" name="name" required
 						 :rules="{ required: true, message: '请填写审批节点名称', trigger: 'blur' }">
