@@ -12,7 +12,7 @@
 			</a-steps>
 		</div>
 
-		<NewbieEdit
+		<NewbieForm
 			v-show="state.currentStep === 0"
 			ref="edit"
 			full-width
