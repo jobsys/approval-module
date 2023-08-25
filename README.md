@@ -3,9 +3,13 @@
 该模块提供了基础的审核流程定义，审核流程实例，审核流程任务，审核流程任务实例，审核流程任务实例记录等功能。
 
 ## 模块安装
-
 ```bash
-composer require jobsys/approval-module
+
+# 安装依赖
+composer require jobsys/approval-module --dev
+
+# 启用模块
+php artisan module:enable Approval && php artisan module:publish-migration Approval && php artisan migrate
 ```
 
 ### 配置
