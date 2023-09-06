@@ -18,7 +18,7 @@
 			full-width
 			:data="state.processForm"
 			:form="getForm()"
-			:process-submit-data="onBeforeSubmit"
+			:before-submit="onBeforeSubmit"
 			submit-button-text="下一步"
 		/>
 
