@@ -47,7 +47,7 @@ php artisan module:enable Approval && php artisan module:publish-migration Appro
 
    ```php
    $project = Project::find(1);
-   $approvalService->createApprovalTask($project, config('module.Approval.approval_types.ProjectCreated'));
+   $approvalService->createApprovalTask($project, config('approval.approval_types.ProjectCreated'));
    ```
 
    > 更推荐使用 `Event/Listener` 的方式创建审核任务，对于原业务流程侵入性更低，且可以在 `Listener` 中处理多种事件，其流程如下：

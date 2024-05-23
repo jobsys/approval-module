@@ -29,7 +29,8 @@ return new class extends Migration {
             $table->integer('approval_process_id')->index()->comment('流程ID'); // 流程ID
             $table->integer('creator_id')->index()->comment('节点创建者ID'); // 节点创建者ID
             $table->string('name')->index()->comment('节点名称'); // 节点名称
-            $table->morphs('approver');
+            $table->string('approver_type')->index()->nullable()->comment('审批人类型'); // 审批人类型
+			$table->integer('approver_id')->index()->nullable()->comment('审批人ID'); // 审批人ID
             $table->integer('weight')->default(0)->comment('权重');
             $table->softDeletes();
             $table->timestamps(); // 创建时间和更新时间

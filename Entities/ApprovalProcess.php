@@ -15,8 +15,8 @@ class ApprovalProcess extends BaseModel
         'is_active' => 'boolean',
     ];
 
-    protected $appends = [
-        'created_at_datetime',
+    protected $accessors = [
+        'created_at' => 'datetime',
     ];
 
     public function nodes(): HasMany

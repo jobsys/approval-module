@@ -16,10 +16,10 @@ class ApprovalTask extends BaseModel
         'approved_at' => 'datetime',
     ];
 
-    protected $appends = [
-        'created_at_datetime',
-        'updated_at_datetime',
-        'approved_at_datetime',
+    protected $accessors = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     //审批者

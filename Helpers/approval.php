@@ -10,9 +10,9 @@ if (!function_exists('approval_status_options')) {
     function approval_status_options(): array
     {
         return [
-            ['value' => ApprovalStatus::Pending->value, 'label' => '待审批'],
-            ['value' => ApprovalStatus::Approved->value, 'label' => '审批通过'],
-            ['value' => ApprovalStatus::Rejected->value, 'label' => '审批驳回'],
+            ['value' => ApprovalStatus::Pending, 'label' => '待审批'],
+            ['value' => ApprovalStatus::Approved, 'label' => '审批通过'],
+            ['value' => ApprovalStatus::Rejected, 'label' => '审批驳回'],
             //  ['value' => ApprovalStatus::Skipped->value, 'label' => '审批跳过']
         ];
     }

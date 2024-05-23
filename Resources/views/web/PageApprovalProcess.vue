@@ -1,5 +1,5 @@
 <template>
-	<NewbieTable ref="list" :url="route('api.manager.approval.process.items')" :columns="columns()" row-key="id">
+	<NewbieTable ref="tableRef" :url="route('api.manager.approval.process.items')" :columns="columns()" row-key="id">
 		<template #functional>
 			<NewbieButton type="primary" :icon="h(PlusOutlined)" @click="onEdit(false)">新增审批流程</NewbieButton>
 		</template>
@@ -7,17 +7,18 @@
 	<NewbieModal v-model:visible="state.showEditorModal" title="审批流程编辑" :width="1000">
 		<div class="px-60">
 			<a-steps :current="state.currentStep" class="!my-8">
-				<a-step title="流程信息"/>
-				<a-step title="流程节点"/>
+				<a-step title="流程信息" />
+				<a-step title="流程节点" />
 			</a-steps>
 		</div>
 
 		<NewbieForm
 			v-show="state.currentStep === 0"
-			ref="edit"
+			ref="editRef"
 			full-width
 			:data="state.processForm"
 			:form="getForm()"
+			:close="() => (state.showEditorModal = false)"
 			:before-submit="onBeforeSubmit"
 			submit-button-text="下一步"
 		/>
@@ -31,10 +32,9 @@
 								<UserOutlined></UserOutlined>
 							</template>
 						</a-avatar>
-						<br/>
+						<br />
 						<span>{{ node.name }}</span>
-						<a-button shape="circle" size="small" danger style="margin: 10px 0 10px 5px"
-								  @click="onDeleteNode(idx)">
+						<a-button shape="circle" size="small" danger style="margin: 10px 0 10px 5px" @click="onDeleteNode(idx)">
 							<template #icon>
 								<DeleteOutlined></DeleteOutlined>
 							</template>
@@ -47,7 +47,7 @@
 						<a-avatar :size="64" @click="onOpenNodeEditor()">
 							<PlusOutlined style="font-size: 28px">></PlusOutlined>
 						</a-avatar>
-						<br/>
+						<br />
 						<span>添加审批节点</span>
 					</template>
 				</a-step>
@@ -55,23 +55,23 @@
 
 			<a-divider></a-divider>
 
-			<a-row>
-				<a-col :offset="6">
-					<NewbieButton type="primary" :fetcher="state.submitFetcher" @click="onSubmit">确定</NewbieButton>
-					<a-button style="margin-left: 10px" @click="() => (state.showEditorModal = false)">关闭</a-button>
-				</a-col>
-			</a-row>
+			<div class="flex items-center justify-center">
+				<NewbieButton type="primary" :fetcher="state.submitFetcher" @click="onSubmit">确定</NewbieButton>
+				<a-button class="ml-4" @click="() => (state.showEditorModal = false)">关闭</a-button>
+			</div>
 		</a-card>
 	</NewbieModal>
 
 	<a-modal title="添加审批节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
 		<a-form :model="state.currentNode" :label-col="{ span: 4 }" @finish="onAddNode">
-			<a-form-item label="审批节点名称" name="name" required
-						 :rules="{ required: true, message: '请填写审批节点名称', trigger: 'blur' }">
+			<a-form-item label="审批节点名称" name="name" required :rules="{ required: true, message: '请填写审批节点名称', trigger: 'blur' }">
 				<a-input v-model:value="state.currentNode.name" placeholder="请填写审批节点名称"></a-input>
 			</a-form-item>
-			<a-form-item label="审批人类型" name="approver_type" required
-						 :rules="{ required: true, message: '请选择审批人类型', trigger: 'change' }">
+			<a-form-item label="审批人类型" name="approver_type" required :rules="{ required: true, message: '请选择审批人类型', trigger: 'change' }">
+				<template #help>
+					<div>“本部门” 表示审核内容所属部门中有审核权限的成员均可审核当前内容</div>
+					<div>“上级部门” 表示该部门的直属上级部门中有审核权限的成员均可以审核当前内容</div>
+				</template>
 				<a-radio-group
 					v-model:value="state.currentNode.approver_type"
 					@change="
@@ -90,7 +90,7 @@
 				label="审批部门"
 				name="approver_id"
 				required
-				v-if="state.currentNode.approver_type.includes('Department')"
+				v-if="state.currentNode.approver_type === 'designated-department'"
 				:rules="{ required: true, message: '请选择审批部门', trigger: 'change' }"
 				help="该部门所有职工都可以审批"
 			>
@@ -107,7 +107,7 @@
 				label="审批角色"
 				name="approver_id"
 				required
-				v-else-if="state.currentNode.approver_type.includes('Role')"
+				v-else-if="state.currentNode.approver_type === 'designated-role'"
 				:rules="{ required: true, message: '请选择审批角色', trigger: 'change' }"
 				help="拥有该角色身份的职工可以审批"
 			>
@@ -124,7 +124,7 @@
 				label="审批人"
 				name="approver_id"
 				required
-				v-else-if="state.currentNode.approver_type.includes('User')"
+				v-else-if="state.currentNode.approver_type === 'designated-user'"
 				:rules="{ required: true, message: '请选择审批人', trigger: 'change' }"
 				help="指定的用户可以审批"
 			>
@@ -139,7 +139,7 @@
 					@search="fetchUser"
 				>
 					<template v-if="state.isUserLoading" #notFoundContent>
-						<a-spin size="small"/>
+						<a-spin size="small" />
 					</template>
 				</a-select>
 			</a-form-item>
@@ -153,24 +153,24 @@
 		   -->
 			<a-divider></a-divider>
 
-			<a-form-item :wrapper-col="{ span: 14, offset: 4 }">
+			<div class="flex items-center justify-center">
 				<a-button type="primary" html-type="submit">确定</a-button>
 				<a-button style="margin-left: 10px" @click="() => (state.showNodeEditor = false)">关闭</a-button>
-			</a-form-item>
+			</div>
 		</a-form>
 	</a-modal>
 </template>
 
 <script setup>
-import {useTableActions} from "jobsys-newbie"
-import {useFetch, useModalConfirm, useProcessStatusSuccess} from "jobsys-newbie/hooks"
-import {message} from "ant-design-vue"
-import {h, inject, reactive, ref, watch} from "vue"
-import {cloneDeep, debounce, find} from "lodash-es"
-import {PlusOutlined, DeleteOutlined, UserOutlined, EditOutlined} from "@ant-design/icons-vue"
+import { useTableActions } from "jobsys-newbie"
+import { useFetch, useModalConfirm, useProcessStatusSuccess } from "jobsys-newbie/hooks"
+import { message } from "ant-design-vue"
+import { h, inject, reactive, ref, watch } from "vue"
+import { cloneDeep, debounce, find } from "lodash-es"
+import { DeleteOutlined, EditOutlined, PlusOutlined, UserOutlined } from "@ant-design/icons-vue"
 
-const list = ref(null)
-const edit = ref(null)
+const tableRef = ref()
+const editRef = ref()
 
 const route = inject("route")
 
@@ -239,7 +239,7 @@ const getForm = () => {
 			key: "type",
 			title: "审批类型",
 			type: "select",
-			options: props.approvalTypes.map((item) => ({label: item.displayName, value: item.type})),
+			options: props.approvalTypes.map((item) => ({ label: item.displayName, value: item.type })),
 			required: true,
 		},
 		{
@@ -271,7 +271,7 @@ const onEdit = (item) => {
 		state.showEditorModal = true
 	} else {
 		useFetch()
-			.get(route("api.manager.approval.process.item", {id: item.id}))
+			.get(route("api.manager.approval.process.item", { id: item.id }))
 			.then((res) => {
 				state.processForm = res.result
 				state.showEditorModal = true
@@ -281,8 +281,12 @@ const onEdit = (item) => {
 
 const closeEditor = (isRefresh) => {
 	if (isRefresh) {
-		list.value.doFetch()
+		tableRef.value.doFetch()
 	}
+	state.processForm = {
+		nodes: [],
+	}
+	editRef.value.reset()
 	state.showEditorModal = false
 }
 
@@ -299,8 +303,8 @@ const onSubmit = async () => {
 	}
 }
 
-const onBeforeSubmit = ({originalForm}) => {
-	state.processForm = {...state.processForm, ...originalForm}
+const onBeforeSubmit = ({ originalForm }) => {
+	state.processForm = { ...state.processForm, ...originalForm }
 	if (state.currentStep === 2) {
 		onSubmit()
 	} else {
@@ -314,11 +318,11 @@ const onDelete = (item) => {
 		`您确认要删除 ${item.name} 吗？`,
 		async () => {
 			try {
-				const res = await useFetch().post(route("api.manager.approval.process.delete"), {id: item.id})
+				const res = await useFetch().post(route("api.manager.approval.process.delete"), { id: item.id })
 				modal.destroy()
 				useProcessStatusSuccess(res, () => {
 					message.success("删除成功")
-					list.value.doFetch()
+					tableRef.value.doFetch()
 				})
 			} catch (e) {
 				modal.destroy(e)
@@ -356,7 +360,7 @@ const filterOption = (input, option) => {
 const fetchUser = debounce((value) => {
 	state.isUserLoading = true
 	useFetch()
-		.get(route("api.manager.user.items"), {name: value})
+		.get(route("api.manager.user.items"), { name: value })
 		.then((res) => {
 			state.userOptions = res.result.data.map((item) => ({
 				label: `${item.name || item.phone}[${item.work_num || "无工号"}]`,
@@ -378,34 +382,34 @@ const columns = () => {
 			title: "审批对象类型",
 			width: 200,
 			key: "type",
-			customRender({record}) {
-				return h("span", {}, find(props.approvalTypes, {type: record.type})?.displayName)
+			customRender({ record }) {
+				return h("span", {}, find(props.approvalTypes, { type: record.type })?.displayName)
 			},
 		},
 		{
 			title: "后续节点权限",
 			width: 200,
 			key: "subsequent_action",
-			customRender({record}) {
-				return h("span", {}, find(props.subsequentActionOptions, {value: record.subsequent_action})?.label)
+			customRender({ record }) {
+				return h("span", {}, find(props.subsequentActionOptions, { value: record.subsequent_action })?.label)
 			},
 		},
 		{
 			title: "是否启用",
 			key: "is_active",
 			width: 80,
-			customRender({record}) {
+			customRender({ record }) {
 				return useTableActions({
 					type: "a-tag",
 					name: record.is_active ? "启用" : "关闭",
-					props: {color: record.is_active ? "green" : "red"},
+					props: { color: record.is_active ? "green" : "red" },
 				})
 			},
 		},
 		{
 			title: "创建时间",
 			width: 200,
-			dataIndex: "created_at_datetime",
+			dataIndex: "created_at",
 		},
 
 		{
@@ -419,7 +423,7 @@ const columns = () => {
 			width: 160,
 			key: "operation",
 			fixed: "right",
-			customRender({record}) {
+			customRender({ record }) {
 				return useTableActions([
 					{
 						name: "编辑",
