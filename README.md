@@ -226,10 +226,9 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
       ```php
       /**
       * 为审批对象添加审批历史和详情
-      * @param User $user
       * @param ApprovalProcess $process
       * @param Model $approvable
       * @return void
       */
-      public function getApprovalDetail(User $user, ApprovalProcess $process, Model $approvable): void
+      public function getApprovalDetail(ApprovalProcess $process, Model $approvable): void
       ```

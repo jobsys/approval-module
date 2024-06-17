@@ -162,6 +162,8 @@ import { useFetch, useProcessStatusSuccess } from "jobsys-newbie/hooks"
 import { message } from "ant-design-vue"
 import { router } from "@inertiajs/vue3"
 
+const emits = defineEmits(["afterApproved"])
+
 const props = defineProps({
 	tasks: { type: Array, default: () => [] }, // 审核流程的中该审核对象的任务列表
 	histories: { type: Array, default: () => [] }, // 审核对象的审核历史记录
@@ -199,6 +201,7 @@ const onApprove = async () => {
 		const res = await useFetch(state.approveFetcher).post(route("api.manager.approval.approve"), form)
 		useProcessStatusSuccess(res, () => {
 			message.success("审批成功")
+			emits("afterApproved")
 			router.reload()
 		})
 	} catch (e) {

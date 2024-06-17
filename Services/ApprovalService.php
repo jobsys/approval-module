@@ -160,16 +160,15 @@ class ApprovalService
 
 	/**
 	 * 审批
-	 * @param User $user
 	 * @param Model $approvable
 	 * @param ApprovalProcess $process
 	 * @param string $approval_status
 	 * @param string $approval_comment
 	 * @return array
 	 */
-	public function approve(User $user, Model $approvable, ApprovalProcess $process, string $approval_status, string $approval_comment = ''): array
+	public function approve(Model $approvable, ApprovalProcess $process, string $approval_status, string $approval_comment = ''): array
 	{
-
+		$user = request()->user();
 		$result = [
 			'approval_status' => ApprovalStatus::Pending,
 			'approval_comment' => $approval_comment,
@@ -179,7 +178,7 @@ class ApprovalService
 			$query->where('approval_process_id', $process->id);
 		}]);
 
-		$task = $this->getUserApprovableTask($user, $process, $approvable);
+		$task = $this->getUserApprovableTask($process, $approvable);
 
 		if (!$task) {
 			return [false, '审批任务不存在'];
@@ -277,13 +276,15 @@ class ApprovalService
 
 	/**
 	 * 获取当前用户对于某个审批对象的审批任务
-	 * @param User $user
 	 * @param ApprovalProcess $process
 	 * @param Model $approvable
 	 * @return ApprovalTask|null
 	 */
-	public function getUserApprovableTask(User $user, ApprovalProcess $process, Model $approvable): ApprovalTask|null
+	public function getUserApprovableTask(ApprovalProcess $process, Model $approvable): ApprovalTask|null
 	{
+
+		$user = request()->user();
+
 		if (!$user->isSuperAdmin()) {
 			$department_ids = $user->departments()->pluck('id')->toArray();
 			$role_ids = $user->roles()->pluck('id')->toArray();
@@ -294,12 +295,14 @@ class ApprovalService
 				->where('subsequent_action', ApprovalSubsequentAction::Approve);
 			//->where('status', ApprovalStatus::Pending);
 
-			$task = $query->where(function ($query) use ($user) {
-				$query->where('approver_id', $user->id)->where('approver_type', User::class);
-			})->orWhere(function ($query) use ($department_ids) {
-				$query->whereIn('approver_id', $department_ids)->where('approver_type', Department::class);
-			})->orWhere(function ($query) use ($role_ids) {
-				$query->whereIn('approver_id', $role_ids)->where('approver_type', Role::class);
+			$task = $query->where(function ($query) use ($user, $department_ids, $role_ids) {
+				$query->where(function ($query) use ($user) {
+					$query->where('approver_id', $user->id)->where('approver_type', User::class);
+				})->orWhere(function ($query) use ($department_ids) {
+					$query->whereIn('approver_id', $department_ids)->where('approver_type', Department::class);
+				})->orWhere(function ($query) use ($role_ids) {
+					$query->whereIn('approver_id', $role_ids)->where('approver_type', Role::class);
+				});
 			})->orderBy('id', 'desc')->first();
 		} else {
 			$task = ApprovalTask::where('approval_process_id', $process->id)
@@ -315,15 +318,14 @@ class ApprovalService
 
 	/**
 	 * 为审批对象添加审批历史和详情
-	 * @param User $user
 	 * @param ApprovalProcess $process
 	 * @param Model $approvable
 	 * @return void
 	 */
-	public function getApprovalDetail(User $user, ApprovalProcess $process, Model $approvable): void
+	public function getApprovalDetail(ApprovalProcess $process, Model $approvable): void
 	{
 		$approvable->load('approvalTasks.approver', 'approvalTasks.executor:id,name', 'approvalTaskHistories.approver', 'approvalTaskHistories.executor:id,name');
-		$approvable->{'current_task'} = $this->getUserApprovableTask($user, $process, $approvable);
+		$approvable->{'current_task'} = $this->getUserApprovableTask($process, $approvable);
 	}
 
 

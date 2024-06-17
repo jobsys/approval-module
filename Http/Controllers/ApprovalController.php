@@ -185,7 +185,7 @@ class ApprovalController extends BaseManagerController
 			return $this->message('未创建审批流程');
 		}
 
-		list($result, $error) = $service->approve(auth()->user(), $task->approvable, $process, $input['approval_status'], $input['approval_comment'] ?? '');
+		list($result, $error) = $service->approve($task->approvable, $process, $input['approval_status'], $input['approval_comment'] ?? '');
 
 		if ($error) {
 			return $this->message($error);
