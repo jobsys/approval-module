@@ -21,14 +21,14 @@ class ApprovalTaskHistory extends BaseModel
 		'updated_at' => 'datetime',
 		'approved_at' => 'datetime',
 	];
-	
-    //可审批者
+
+    //可审核者
     public function approver(): MorphTo
     {
         return $this->morphTo();
     }
 
-    //审批执行人
+    //审核执行人
     public function executor()
     {
         return $this->belongsTo(User::class, 'approve_user_id', 'id');

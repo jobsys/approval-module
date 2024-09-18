@@ -112,11 +112,11 @@ Modules\Approval\Entities\ApprovalTaskHistory            # 审核任务历史记
 // 审核状态
 enum ApprovalStatus: string
 {
-    case Pending = 'pending'; //待审批
-    case Approved = 'approved'; //审批通过
-    case Rejected = 'rejected'; //审批驳回
-    case Skipped = 'skipped'; //审批跳过
-    case Updated = 'updated'; //审批对象已更新
+    case Pending = 'pending'; //待审核
+    case Approved = 'approved'; //审核通过
+    case Rejected = 'rejected'; //审核驳回
+    case Skipped = 'skipped'; //审核跳过
+    case Updated = 'updated'; //审核对象已更新
 }
 
 //后续节点对于审核对象的可见性
@@ -124,7 +124,7 @@ enum ApprovalSubsequentAction: string
 {
     case Invisible = 'invisible'; //不可见
     case Visible = 'visible'; //可见
-    case Approve = 'approve'; //可审批
+    case Approve = 'approve'; //可审核
 }
 ```
 
@@ -136,7 +136,7 @@ enum ApprovalSubsequentAction: string
 
   ```php
   /**
-   * 获取前端可用的审批状态选项
+   * 获取前端可用的审核状态选项
    * @return array[]
    */
   function approval_status_options(): array
@@ -166,11 +166,11 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
 
 + **`ApprovalService`**
 
-    - `createApprovalTask` 创建审批任务
+    - `createApprovalTask` 创建审核任务
 
       ```php
       /**
-      * 创建审批任务
+      * 创建审核任务
       * @param Model $approvable
       * @param array $config
       * @return array
@@ -178,11 +178,11 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
       public function createApprovalTask(Model $approvable, array $config): array
       ```
 
-    - `getUserApprovable` 获取用户的审批任务
+    - `getUserApprovable` 获取用户的审核任务
 
       ```php
       /**
-      * 获取用户待审批的审批对象
+      * 获取用户待审核的审核对象
       * @param Builder $builder
       * @param User $user
       * @param ApprovalProcess $process
@@ -192,11 +192,11 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
       public function getUserApprovable(Builder $builder, User $user, ApprovalProcess $process, string $status = ''): Builder
       ```
 
-    - `approve` 审批
+    - `approve` 审核
 
       ```php
       /**
-      * 审批
+      * 审核
       * @param User $user
       * @param Model $approvable
       * @param ApprovalProcess $process
@@ -208,11 +208,11 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
       public function approve(User $user, Model $approvable, ApprovalProcess $process, string $approval_status, string $approval_comment = '', bool $is_snapshot = false): array
       ```
 
-    - `getUserApprovableTask` 获取当前用户对于某个审批对象的审批任务
+    - `getUserApprovableTask` 获取当前用户对于某个审核对象的审核任务
 
       ```php
       /**
-      * 获取当前用户对于某个审批对象的审批任务
+      * 获取当前用户对于某个审核对象的审核任务
       * @param User $user
       * @param ApprovalProcess $process
       * @param Model $approvable
@@ -221,11 +221,11 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
       public function getUserApprovableTask(User $user, ApprovalProcess $process, Model $approvable): ApprovalTask|null
       ```
 
-    - `getApprovalDetail` 为审批对象添加审批历史和详情
+    - `getApprovalDetail` 为审核对象添加审核历史和详情
 
       ```php
       /**
-      * 为审批对象添加审批历史和详情
+      * 为审核对象添加审核历史和详情
       * @param ApprovalProcess $process
       * @param Model $approvable
       * @return void

@@ -11,6 +11,8 @@ class ApprovalProcess extends BaseModel
 
     use Filterable;
 
+    protected $model_name = "审核流程";
+
     protected $casts = [
         'is_active' => 'boolean',
     ];

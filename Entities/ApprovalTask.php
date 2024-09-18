@@ -22,7 +22,7 @@ class ApprovalTask extends BaseModel
         'approved_at' => 'datetime',
     ];
 
-    //审批者
+    //审核者
     public function approver(): MorphTo
     {
         return $this->morphTo();

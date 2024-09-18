@@ -2,8 +2,10 @@
 
 namespace Modules\Approval\Providers;
 
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Database\Eloquent\Factory;
+use Modules\Approval\Events\ApprovableCreated;
+use Modules\Approval\Listeners\ApprovableCreatedListener;
 
 class ApprovalServiceProvider extends ServiceProvider
 {
@@ -38,6 +40,7 @@ class ApprovalServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->register(RouteServiceProvider::class);
+        $this->app['events']->listen(ApprovableCreated::class, ApprovableCreatedListener::class);
     }
 
     /**
@@ -53,6 +56,17 @@ class ApprovalServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             module_path($this->moduleName, 'Config/config.php'), $this->moduleNameLower
         );
+
+        Blueprint::macro('approval', function () {
+            $this->string('approval_status', 30)->nullable()->index()->comment('审核状态');
+            $this->string('approval_comment')->nullable()->comment('审核备注');
+            $this->dateTime('approval_at')->nullable()->comment('审核时间');
+        });
+
+        Blueprint::macro('dropApproval', function () {
+            $this->dropIndex(['approval_status']);
+            $this->dropColumn(['approval_status', 'approval_comment', 'approval_at']);
+        });
     }
 
     /**

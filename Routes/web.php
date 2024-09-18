@@ -11,10 +11,10 @@
 |
 */
 
-$route_prefix = config('module.Approval.route_prefix', 'manager');
-$route_url_prefix = $route_prefix ? $route_prefix . '/' : '';
-$route_name_prefix = $route_prefix ? $route_prefix . '.' : '';
 
-Route::prefix("{$route_url_prefix}approval")->name("page.{$route_name_prefix}approval.")->group(function () {
-    Route::get('/process', 'ApprovalController@pageApprovalProcess')->name('process');
+Route::prefix("manager/approval")->name("page.manager.approval.")->group(function () {
+	Route::get('/process', 'ApprovalController@pageApprovalProcess')->name('process');
+
 });
+Route::get("manager/todo/approval", 'ApprovalController@pageApprovalTodo')->name("page.manager.todo.approval");
+Route::get("manager/todo/approval/{slug}", 'ApprovalController@pageApprovalTodoList')->name("page.manager.todo.approval.list");

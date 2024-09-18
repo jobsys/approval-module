@@ -1,10 +1,59 @@
 <template>
-	<NewbieTable ref="tableRef" :url="route('api.manager.approval.process.items')" :columns="columns()" row-key="id">
-		<template #functional>
-			<NewbieButton type="primary" :icon="h(PlusOutlined)" @click="onEdit(false)">新增审批流程</NewbieButton>
+	<a-button type="primary" @click="() => (state.showProcessModal = true)" :icon="h(SubnodeOutlined)">设置审核流程 </a-button>
+	<a-divider></a-divider>
+	<a-alert message="未绑定审核流程的业务将不会被审核" type="warning" show-icon class="mb-4" />
+	<a-table :columns="state.bindingColumns" :pagination="false" :scroll="{ y: 400 }" :data-source="state.bindingData">
+		<template #bodyCell="{ column, record }">
+			<div v-if="column.dataIndex === 'auto_approve'">
+				<a-switch v-model:checked="record.is_auto_approve" checked-children="开" un-checked-children="关"></a-switch>
+				<div v-if="record.is_auto_approve" class="bg-gray-100 mt-4 p-2 rounded">
+					<div class="flex items-center">
+						<span class="w-[100px]">自动审核状态：</span>
+						<a-select
+							class="w-[300px]"
+							placeholder="请选择自动审核状态"
+							v-model:value="record.auto_approve_status"
+							:options="state.approvalOptions"
+						></a-select>
+					</div>
+					<div class="flex items-center mt-2">
+						<span class="w-[100px]">自动审核说明：</span>
+						<a-textarea
+							class="w-[300px]"
+							v-model:value="record.auto_approve_comment"
+							allow-clear
+							placeholder="请填写自动审核说明"
+							:auto-size="{ minRows: 1, maxRows: 3 }"
+						></a-textarea>
+					</div>
+				</div>
+			</div>
+
+			<a-select
+				v-if="column.dataIndex === 'process' && !record.children"
+				v-model:value="record.process"
+				placeholder="请选择审核流程"
+				class="w-[200px]"
+				:options="processOptions"
+				allow-clear
+				@change="(value) => (record.process = value)"
+			></a-select>
 		</template>
-	</NewbieTable>
-	<NewbieModal v-model:visible="state.showEditorModal" title="审批流程编辑" :width="1000">
+	</a-table>
+
+	<div class="text-center">
+		<NewbieButton :fetcher="state.bindingFetcher" type="primary" class="my-3" @click="onSubmitBinding">保存 </NewbieButton>
+	</div>
+
+	<NewbieModal v-model:visible="state.showProcessModal" title="审核流程列表" type="drawer" :width="1200" @close="onCloseProcessModal">
+		<NewbieTable ref="tableRef" :url="route('api.manager.approval.process.items')" :columns="columns()">
+			<template #functional>
+				<NewbieButton type="primary" :icon="h(PlusOutlined)" @click="onEdit(false)">新增审核流程</NewbieButton>
+			</template>
+		</NewbieTable>
+	</NewbieModal>
+
+	<NewbieModal v-model:visible="state.showEditorModal" title="审核流程编辑" :width="1000">
 		<div class="px-60">
 			<a-steps :current="state.currentStep" class="!my-8">
 				<a-step title="流程信息" />
@@ -24,7 +73,7 @@
 		/>
 
 		<a-card v-if="state.currentStep === 1">
-			<a-steps progress-dot :current="state.currentNodeStep">
+			<a-steps :current="state.currentNodeStep">
 				<a-step v-for="(node, idx) in state.processForm.nodes" :key="idx">
 					<template #subTitle>
 						<a-avatar :size="64" style="background-color: #87d068">
@@ -48,7 +97,7 @@
 							<PlusOutlined style="font-size: 28px">></PlusOutlined>
 						</a-avatar>
 						<br />
-						<span>添加审批节点</span>
+						<span>添加审核节点</span>
 					</template>
 				</a-step>
 			</a-steps>
@@ -56,18 +105,18 @@
 			<a-divider></a-divider>
 
 			<div class="flex items-center justify-center">
-				<NewbieButton type="primary" :fetcher="state.submitFetcher" @click="onSubmit">确定</NewbieButton>
+				<NewbieButton type="primary" :fetcher="state.processFetcher" @click="onSubmit">确定</NewbieButton>
 				<a-button class="ml-4" @click="() => (state.showEditorModal = false)">关闭</a-button>
 			</div>
 		</a-card>
 	</NewbieModal>
 
-	<a-modal title="添加审批节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
+	<a-modal title="添加审核节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
 		<a-form :model="state.currentNode" :label-col="{ span: 4 }" @finish="onAddNode">
-			<a-form-item label="审批节点名称" name="name" required :rules="{ required: true, message: '请填写审批节点名称', trigger: 'blur' }">
-				<a-input v-model:value="state.currentNode.name" placeholder="请填写审批节点名称"></a-input>
+			<a-form-item label="审核节点名称" name="name" required :rules="{ required: true, message: '请填写审核节点名称', trigger: 'blur' }">
+				<a-input v-model:value="state.currentNode.name" placeholder="请填写审核节点名称"></a-input>
 			</a-form-item>
-			<a-form-item label="审批人类型" name="approver_type" required :rules="{ required: true, message: '请选择审批人类型', trigger: 'change' }">
+			<a-form-item label="审核人类型" name="approver_type" required :rules="{ required: true, message: '请选择审核人类型', trigger: 'change' }">
 				<template #help>
 					<div>“本部门” 表示审核内容所属部门中有审核权限的成员均可审核当前内容</div>
 					<div>“上级部门” 表示该部门的直属上级部门中有审核权限的成员均可以审核当前内容</div>
@@ -87,46 +136,46 @@
 			</a-form-item>
 
 			<a-form-item
-				label="审批部门"
+				label="审核部门"
 				name="approver_id"
 				required
 				v-if="state.currentNode.approver_type === 'designated-department'"
-				:rules="{ required: true, message: '请选择审批部门', trigger: 'change' }"
-				help="该部门所有职工都可以审批"
+				:rules="{ required: true, message: '请选择审核部门', trigger: 'change' }"
+				help="该部门所有职工都可以审核"
 			>
 				<a-select
 					v-model:value="state.currentNode.approver_id"
 					show-search
 					:options="departmentOptions"
 					:filter-option="filterOption"
-					placeholder="请选择审批部门"
+					placeholder="请选择审核部门"
 				/>
 			</a-form-item>
 
 			<a-form-item
-				label="审批角色"
+				label="审核角色"
 				name="approver_id"
 				required
 				v-else-if="state.currentNode.approver_type === 'designated-role'"
-				:rules="{ required: true, message: '请选择审批角色', trigger: 'change' }"
-				help="拥有该角色身份的职工可以审批"
+				:rules="{ required: true, message: '请选择审核角色', trigger: 'change' }"
+				help="拥有该角色身份的职工可以审核"
 			>
 				<a-select
 					v-model:value="state.currentNode.approver_id"
 					show-search
 					:filter-option="filterOption"
 					:options="roleOptions"
-					placeholder="请选择审批角色"
+					placeholder="请选择审核角色"
 				/>
 			</a-form-item>
 
 			<a-form-item
-				label="审批人"
+				label="审核人"
 				name="approver_id"
 				required
 				v-else-if="state.currentNode.approver_type === 'designated-user'"
-				:rules="{ required: true, message: '请选择审批人', trigger: 'change' }"
-				help="指定的用户可以审批"
+				:rules="{ required: true, message: '请选择审核人', trigger: 'change' }"
+				help="指定的用户可以审核"
 			>
 				<a-select
 					v-model:value="state.currentNode.approver_id"
@@ -167,7 +216,8 @@ import { useFetch, useModalConfirm, useProcessStatusSuccess } from "jobsys-newbi
 import { message } from "ant-design-vue"
 import { h, inject, reactive, ref, watch } from "vue"
 import { cloneDeep, debounce, find } from "lodash-es"
-import { DeleteOutlined, EditOutlined, PlusOutlined, UserOutlined } from "@ant-design/icons-vue"
+import { DeleteOutlined, EditOutlined, PlusOutlined, SubnodeOutlined, UserOutlined } from "@ant-design/icons-vue"
+import { router } from "@inertiajs/vue3"
 
 const tableRef = ref()
 const editRef = ref()
@@ -175,26 +225,12 @@ const editRef = ref()
 const route = inject("route")
 
 const props = defineProps({
-	approvalTypes: {
-		type: Array,
-		default: () => [],
-	},
-	roleOptions: {
-		type: Array,
-		default: () => [],
-	},
-	departmentOptions: {
-		type: Array,
-		default: () => [],
-	},
-	approverOptions: {
-		type: Array,
-		default: () => [],
-	},
-	subsequentActionOptions: {
-		type: Array,
-		default: () => [],
-	},
+	roleOptions: { type: Array, default: () => [] },
+	departmentOptions: { type: Array, default: () => [] },
+	approverOptions: { type: Array, default: () => [] },
+	subsequentActionOptions: { type: Array, default: () => [] },
+	bindingItems: { type: Array, default: () => [] },
+	processOptions: { type: Array, default: () => [] },
 })
 
 const defaultNode = {
@@ -206,6 +242,7 @@ const defaultNode = {
 
 const state = reactive({
 	showEditorModal: false,
+	showProcessModal: false,
 	showNodeEditor: false,
 	currentStep: 0,
 	currentNodeStep: -1,
@@ -215,7 +252,18 @@ const state = reactive({
 	},
 	userOptions: [],
 	isUserLoading: false,
-	submitFetcher: {},
+	bindingFetcher: {},
+	processFetcher: {},
+	approvalOptions: [
+		{ label: "审核通过", value: "approved" },
+		{ label: "审核驳回", value: "rejected" },
+	],
+	bindingData: cloneDeep(props.bindingItems),
+	bindingColumns: [
+		{ title: "业务类型", dataIndex: "service_name" },
+		/*{ title: "自动审核设置", dataIndex: "auto_approve" },*/
+		{ title: "审核流程绑定", dataIndex: "process" },
+	],
 })
 
 watch(
@@ -228,28 +276,25 @@ watch(
 	},
 )
 
+const onCloseProcessModal = () => {
+	router.reload({ only: ["processOptions"] })
+}
+
 const getForm = () => {
 	return [
 		{
 			key: "name",
-			title: "审批流程名称",
-			required: true,
-		},
-		{
-			key: "type",
-			title: "审批类型",
-			type: "select",
-			options: props.approvalTypes.map((item) => ({ label: item.displayName, value: item.type })),
+			title: "审核流程名称",
 			required: true,
 		},
 		{
 			key: "subsequent_action",
 			title: "后续节点权限",
-			type: "select",
+			type: "radio",
 			options: props.subsequentActionOptions,
 			required: true,
 			defaultValue: "invisible",
-			tips: "不可见：在当前节点未审批通过之前，后续节点的审批者无法查看到该审批内容\n可见不可审批：在当前节点未审批通过之前，后续节点的审批者无法查看到该审批内容但无法审批\n可见可审批：该审批内容对后续节点可见，并可被审批",
+			tips: "不可见：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容\n可见不可审核：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容但无法审核\n可见可审核：该审核内容对后续节点可见，并可被审核",
 		},
 		{
 			key: "is_active",
@@ -290,10 +335,51 @@ const closeEditor = (isRefresh) => {
 	state.showEditorModal = false
 }
 
+const onSubmitBinding = async () => {
+	try {
+		const approvables = cloneDeep(state.bindingData)
+
+		const items = []
+
+		for (let n = 0; n < approvables.length; n += 1) {
+			const { children } = approvables[n]
+			for (let i = 0; i < children.length; i += 1) {
+				const child = children[i]
+
+				if (child.is_auto_approve) {
+					if (!child.process) {
+						message.error(`${child.service_name}未绑定审核流程`)
+						return
+					}
+
+					if (!child.auto_approve_status) {
+						message.error(`${child.service_name}未设置自动审核状态`)
+						return
+					}
+
+					if (child.auto_approve_status === "rejected" && !child.auto_approve_comment) {
+						message.error(`请为${child.service_name}设置审核驳回说明`)
+						return
+					}
+				}
+
+				items.push(child)
+			}
+		}
+
+		const res = await useFetch(state.bindingFetcher).post(route("api.manager.approval.binding.edit"), { items })
+		useProcessStatusSuccess(res, () => {
+			message.success("保存成功")
+		})
+	} catch (e) {
+		message.error(e.message)
+	}
+}
+
 const onSubmit = async () => {
 	try {
 		const form = cloneDeep(state.processForm)
-		const res = await useFetch(state.submitFetcher).post(route("api.manager.approval.process.edit"), form)
+		const res = await useFetch(state.processFetcher).post(route("api.manager.approval.process.edit"), form)
 		useProcessStatusSuccess(res, () => {
 			message.success("保存成功")
 			closeEditor(true)
@@ -339,7 +425,7 @@ const onAddNode = () => {
 }
 const onDeleteNode = (idx) => {
 	const modal = useModalConfirm(
-		`您确认要删除该审批节点吗？`,
+		`您确认要删除该审核节点吗？`,
 		() => {
 			state.processForm.nodes.splice(idx, 1)
 			modal.destroy()
@@ -373,18 +459,10 @@ const fetchUser = debounce((value) => {
 const columns = () => {
 	return [
 		{
-			title: "审批流程名称",
+			title: "审核流程名称",
 			width: 200,
 			dataIndex: "name",
 			filterable: "input",
-		},
-		{
-			title: "审批对象类型",
-			width: 200,
-			key: "type",
-			customRender({ record }) {
-				return h("span", {}, find(props.approvalTypes, { type: record.type })?.displayName)
-			},
 		},
 		{
 			title: "后续节点权限",
