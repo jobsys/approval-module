@@ -17,6 +17,7 @@ use Modules\Approval\Entities\ApprovalTask;
 use Modules\Approval\Entities\ApprovalTaskHistory;
 use Modules\Approval\Enums\ApprovalStatus;
 use Modules\Approval\Enums\ApprovalSubsequentAction;
+use Modules\Approval\Enums\ApprovalVendor;
 use Modules\Approval\Enums\ApproverTypes;
 use Modules\Approval\Notifications\ApprovedNotification;
 use Modules\Approval\Notifications\ApproveTodo;
@@ -46,13 +47,13 @@ class ApprovalService
 
 		//TODO 在这里判断是否已经进入审核流程，如果进行审核流程可能就不能进行修改了?
 
-		if ($approvable->approvalTasks()->count() && $approvable->approvalTaskHistories()->count()) {
+		if ($approvable->approval_tasks()->count() && $approvable->approval_task_histories()->count()) {
 			//如果已经有审核历史，则添加一条审核对象已经更新的记录，如果没有审核历史，审核对象可以任意更新
 			/**
 			 * 用审核任务的属性创建更新历史
 			 * @var ApprovalTask $task
 			 */
-			$task = $approvable->approvalTasks()->first();
+			$task = $approvable->approval_tasks()->first();
 			ApprovalTaskHistory::create(array_merge($task->getOriginal(), [
 				'id' => null,
 				'status' => ApprovalStatus::Updated,
@@ -66,7 +67,103 @@ class ApprovalService
 		}
 
 		//然后删除所有审核任务
-		$approvable->approvalTasks()->delete();
+		$approvable->approval_tasks()->delete();
+
+		[, $error] = $this->createNodeTaskEntity($approvable, $process);
+
+		if ($error) {
+			return [false, $error];
+		}
+
+		if ($binding && $binding->is_auto_approve) {
+			[, $error] = $this->autoApprove($binding, $approvable);
+		}
+
+		if ($error) {
+			return [false, $error];
+		}
+
+		return [true, null];
+	}
+
+	/**
+	 * 重置审核任务
+	 * @param ApprovableTarget $approvable
+	 * @return array
+	 */
+	public function resetApprovalTask(ApprovableTarget $approvable): array
+	{
+		// 重置的前置任务
+		[$before_result, $before_message] = $approvable->beforeReset();
+
+		if (!$before_result) {
+			return [$before_result, $before_message];
+		}
+
+		[$process, $binding] = $this->getApprovableProcess($approvable);
+		if (!$process) {
+			return [true, null];
+		}
+
+		if (!$process->nodes->count()) {
+			return [false, '审核流程未配置审核节点'];
+		}
+
+		if (!auth()->user()->isSuperAdmin()) {
+			$can_reset = false;
+
+			foreach ($process->nodes as $node) {
+				if ($node->approver_type === ApproverTypes::DesignatedDepartment) {
+					if (auth()->user()->departments()->where('id', $node->approver_id)->exists()) {
+						$can_reset = true;
+						break;
+					}
+				} else if ($node->approver_type === ApproverTypes::SuperiorDepartment) {
+					//在 Node 定义的时候，如果是上级部门审核，那么 approver_id 就是部门的 id，这里需要转换成上级部门的 id
+					$approver_id = Department::where('id', $approvable->department_id)->first()?->parent()?->id;
+					if (auth()->user()->departments()->where('id', $approver_id)->exists()) {
+						$can_reset = true;
+						break;
+					}
+				} else if ($node->approver_type === ApproverTypes::LocalDepartment) {
+					if (!empty($approvable->department_id) && auth()->user()->departments()->where('id', $approvable->department_id)->exists()) {
+						$can_reset = true;
+						break;
+					}
+				} else if ($node->approver_type === ApproverTypes::DesignatedRole) {
+					if (auth()->user()->roles()->where('id', $node->approver_id)->exists()) {
+						$can_reset = true;
+						break;
+					}
+				} else if ($node->approver_type === ApproverTypes::DesignatedUser || $node->approver_type === ApproverTypes::CustomizeUser) {
+					if (auth()->user()->id === $node->approver_id) {
+						$can_reset = true;
+						break;
+					}
+				}
+			}
+
+			if (!$can_reset) {
+				return [false, '没有重置权限'];
+			}
+		}
+
+		ApprovalTaskHistory::create([
+			'approval_process_id' => $process->id,
+			'approval_process_node_id' => 0,
+			'approvable_type' => $approvable::getApprovableClass(),
+			'approvable_id' => $approvable->getKey(),
+			'approver_type' => User::class,
+			'approver_id' => auth()->id(),
+			'status' => ApprovalStatus::Reset,
+			'remark' => '重置审核任务',
+			'approve_user_id' => auth()->id(),
+			'approved_at' => null,
+			'created_at' => now(),
+			'updated_at' => now(),
+		]);
+
+		$approvable->approval_tasks()->delete();
 
 		[, $error] = $this->createNodeTaskEntity($approvable, $process);
 
@@ -100,6 +197,7 @@ class ApprovalService
 		}
 
 		if (!$process->nodes->count()) {
+			$approvable->{'approval_message'} = '审核流程未配置审核节点';
 			return [false, '审核流程未配置审核节点'];
 		}
 
@@ -111,7 +209,7 @@ class ApprovalService
 			//不是超管拿可以审核的第一个任务，按流程进行
 			$department_ids = $user->departments()->pluck('id')->toArray();
 			$role_ids = $user->roles()->pluck('id')->toArray();
-			$task = ApprovalTask::where('approvable_type', get_class($approvable))->where('approvable_id', $approvable->getKey())
+			$task = ApprovalTask::where('approvable_type', $approvable::getApprovableClass())->where('approvable_id', $approvable->getKey())
 				->whereIn('subsequent_action', [ApprovalSubsequentAction::Approve, ApprovalSubsequentAction::Visible])
 				->where('approval_process_id', $process->id)
 				->where(function ($query) use ($user, $department_ids, $role_ids) {
@@ -122,14 +220,30 @@ class ApprovalService
 					})->orWhere(function ($query) use ($role_ids) {
 						$query->whereIn('approver_id', $role_ids)->where('approver_type', Role::class);
 					});
-				})->first();
+				})
+				->orderByRaw("FIELD(status, 'pending', 'approved')") //如果一个审核者有多个任务，那么优先返回 pending 状态的任务
+				->orderBy('id')
+				->first();
 		} else {
-			//超管拿最后一个待审核任务，前置任务将统一被设置成跳过
-			$task = ApprovalTask::where('approvable_type', get_class($approvable))->where('approvable_id', $approvable->getKey())
-				->where('approval_process_id', $process->id)->orderByDesc('id')->first();
+			//@deprecated 超管拿最后一个待审核任务，前置任务将统一被设置成跳过
+			/*
+				$task = ApprovalTask::where('approvable_type', $approvable::getApprovableClass())->where('approvable_id', $approvable->getKey())
+						->where('approval_process_id', $process->id)->orderByDesc('id')->first();
+			*/
+
+			/**
+			 * 拿最近一个可审核任务
+			 */
+			$task = ApprovalTask::where('approvable_type', $approvable::getApprovableClass())->where('approvable_id', $approvable->getKey())
+				->where('approval_process_id', $process->id)->orderByRaw("FIELD(status, 'pending', 'approved')")
+				->orderBy('id')->first();
 		}
 
-		$approvable->{'current_task'} = $task;
+		if ($task) {
+			$approvable->{'current_task'} = $task;
+		} else {
+			$approvable->{'approval_message'} = '无审核任务';
+		}
 
 		return [$task, $task ? null : '无审核任务'];
 	}
@@ -165,7 +279,7 @@ class ApprovalService
 		if (!$user->isSuperAdmin()) {
 			$department_ids = $user->departments()->pluck('id')->toArray();
 			$role_ids = $user->roles()->pluck('id')->toArray();
-			return $approvable->whereHas('approvalTasks',
+			return $approvable->whereHas('approval_tasks',
 				function ($query) use ($user, $department_ids, $role_ids, $process, $status, $subsequent_action) {
 					$query->when($status, function ($query, $status) {
 						$query->whereIn('status', $status);
@@ -184,7 +298,7 @@ class ApprovalService
 				}
 			);
 		}
-		return $approvable->whereHas('approvalTasks',
+		return $approvable->whereHas('approval_tasks',
 			function ($query) use ($process, $status, $subsequent_action) {
 				$query->when($status, function ($query, $status) {
 					$query->whereIn('status', $status);
@@ -205,7 +319,7 @@ class ApprovalService
 	 */
 	public function approve(ApprovableTarget $approvable, string $approval_status, string $approval_comment = '', string $approval_remark = ''): array
 	{
-		$approvable->loadMissing(['approvalTasks']);
+		$approvable->loadMissing(['approval_tasks']);
 
 
 		[$task, $error] = $this->canUserApproveTarget($approvable);
@@ -221,12 +335,12 @@ class ApprovalService
 		/**
 		 * @var $tasks Collection
 		 */
-		$tasks = $approvable->approvalTasks->sortBy('id')->sortBy('weight');
+		$tasks = $approvable->approval_tasks->sortBy('id')->sortBy('weight');
 
 		$task_index = $tasks->search(fn($item) => $item->id == $task->id);
 
 		// 审核前置任务
-		[$before_result, $before_message] = $approvable->beforeApprove(['task_index' => $task_index, 'task' => $task, 'approval_status' => $approval_status]);
+		[$before_result, $before_message] = $approvable->beforeApprove(['task_index' => $task_index, 'task' => $task, 'tasks' => $tasks, 'approval_status' => $approval_status]);
 
 		if (!$before_result) {
 			return [$before_result, $before_message];
@@ -293,7 +407,9 @@ class ApprovalService
 					]);
 				}
 				//通知发起者
-				$approvable->getInitiator()->notify(new ApprovedNotification($approvable));
+				if ($initiator = $approvable->getInitiator()) {
+					$initiator->notify(new ApprovedNotification($approvable));
+				}
 			} else {
 				if (array_key_exists('approval_status', $approvable->attributesToArray())) {
 					app(get_class($approvable))->whereKey($approvable->getKey())->update([
@@ -305,7 +421,7 @@ class ApprovalService
 			}
 
 			// 审核后置任务
-			[$after_result, $after_message] = $approvable->afterApprove(['task_index' => $task_index, 'task' => $task, 'approval_status' => $approval_status, 'is_finished' => $is_finished]);
+			[$after_result, $after_message] = $approvable->afterApprove(['task_index' => $task_index, 'task' => $task, 'tasks' => $tasks, 'approval_status' => $approval_status, 'is_finished' => $is_finished]);
 
 			if (!$after_result) {
 				return [$after_result, $after_message];
@@ -333,7 +449,7 @@ class ApprovalService
 			return [true, null];
 		}
 
-		$approvable->loadMissing(['approvalTasks']);
+		$approvable->loadMissing(['approval_tasks']);
 
 		[$task, $error] = $this->canUserApproveTarget($approvable, User::find(config('conf.super_admin_id')));
 
@@ -345,13 +461,13 @@ class ApprovalService
 		/**
 		 * @var $tasks Collection
 		 */
-		$tasks = $approvable->approvalTasks->sortBy('id')->sortBy('weight');
+		$tasks = $approvable->approval_tasks->sortBy('id')->sortBy('weight');
 
 		$task_index = $tasks->search(fn($item) => $item->id == $task->id);
 
 
 		// 审核前置任务
-		[$before_result, $before_message] = $approvable->beforeApprove(['task_index' => $task_index, 'task' => $task, 'approval_status' => $binding->auto_approve_status]);
+		[$before_result, $before_message] = $approvable->beforeApprove(['task_index' => $task_index, 'task' => $task, 'tasks' => $tasks, 'approval_status' => $binding->auto_approve_status]);
 
 		if (!$before_result) {
 			return [$before_result, $before_message];
@@ -400,10 +516,12 @@ class ApprovalService
 			}
 
 			//通知发起者
-			$approvable->getInitiator()->notify(new ApprovedNotification($approvable));
+			if ($initiator = $approvable->getInitiator()) {
+				$initiator->notify(new ApprovedNotification($approvable));
+			}
 
 			// 审核后置任务
-			[$after_result, $after_message] = $approvable->afterApprove(['task_index' => $task_index, 'task' => $task, 'approval_status' => $binding->auto_approve_status, 'is_finished' => true]);
+			[$after_result, $after_message] = $approvable->afterApprove(['task_index' => $task_index, 'task' => $task, 'tasks' => $tasks, 'approval_status' => $binding->auto_approve_status, 'is_finished' => true]);
 
 			if (!$after_result) {
 				return [$after_result, $after_message];
@@ -419,16 +537,6 @@ class ApprovalService
 	}
 
 	/**
-	 * 为审核对象添加审核历史和详情
-	 * @param ApprovalTask $approvable
-	 * @return void
-	 */
-	public function getApprovalDetail(ApprovalTask $approvable): void
-	{
-		$approvable->load('approvalTasks.approver', 'approvalTasks.executor:id,name', 'approvalTaskHistories.approver', 'approvalTaskHistories.executor:id,name');
-	}
-
-	/**
 	 * 包装审核对象
 	 * @param ApprovableTarget $approvable
 	 * @return array
@@ -437,12 +545,13 @@ class ApprovalService
 	{
 		return [
 			'id' => $approvable->getKey(),
-			'type' => $approvable->getApprovableType(),
+			'type' => $approvable::getApprovableType(),
+			'slug' => $approvable::getModelSlug(),
 			'url' => $approvable->getApproveUrl(),
 			'message' => $approvable->getApproveTodoMessage(),
-			'slug' => $approvable->getModelSlug(),
 			'approval_status' => $approvable->approval_status ?? null,
 			'approval_comment' => $approvable->approval_comment ?? null,
+			'approval_tasks' => $approvable->approval_tasks ?? [],
 			'approval_at' => $approvable->approval_at ?? null,
 			'created_at' => $approvable->created_at?->toDateTimeString() ?? null,
 			'updated_at' => $approvable->updated_at?->toDateTimeString() ?? null,
@@ -460,17 +569,30 @@ class ApprovalService
 		$approvables = config('approval.approvables');
 
 		foreach ($approvables as $approvable) {
-			foreach ($approvable['children'] as $item) {
+			foreach ($approvable['children'] as $approvable_class) {
 				/**
 				 * @var BaseModel|ApprovableTarget $model
 				 */
-				$model = app($item);
-				if ($model->getModelSlug() === $slug) {
-					return $model;
+				//有的 Model 只是为了不同业务的审核流程而存在，没有实际的表，重用的其它 Model
+				$approvable_class = $approvable_class::getApprovableClass();
+				if ($approvable_class::getModelSlug() === $slug) {
+					return app($approvable_class);
 				}
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * 判断审核流程是否有手动指定节点
+	 * @param ApprovalProcess $process
+	 * @return bool
+	 */
+	public function isProcessCustomize(ApprovalProcess $process): bool
+	{
+		$process->loadMissing(['nodes']);
+
+		return $process->nodes->where('approver_type', ApproverTypes::CustomizeUser)->count() > 0;
 	}
 
 	/**
@@ -490,7 +612,7 @@ class ApprovalService
 				return [$process, null];
 			}
 		}
-		$binding = ApprovalProcessBinding::with(['process', 'process.nodes'])->where("approvable_type", get_class($approvable))->first();
+		$binding = ApprovalProcessBinding::with(['process', 'process.nodes'])->where("approvable_type", $approvable::getApprovableClass())->first();
 
 		if ($binding) {
 			return [$binding->process, $binding];
@@ -507,8 +629,11 @@ class ApprovalService
 	 */
 	private function sendApprovalTodoNotification(ApprovalTask $task, ApprovableTarget $approvable): void
 	{
+		//TODO 有相同审核权限的人太多，失去通知意义
+		return;
+
 		if ($task->approver_type === User::class) {
-			$task->approver->notify(new ApproveTodo($task, $approvable));
+			$task->approver?->notify(new ApproveTodo($task, $approvable));
 		} else if ($task->approver_type === Department::class) {
 			$users = $task->approver->users;
 			foreach ($users as $user) {
@@ -544,7 +669,7 @@ class ApprovalService
 				$tasks[] = $task;
 
 				//发送待办消息
-				if ($index === 0) {
+				if ($index === 0 && $task->approver_id !== ApprovalVendor::UNDETERMINED_USER) {
 					$this->sendApprovalTodoNotification($task, $approvable);
 				}
 			}
@@ -558,7 +683,7 @@ class ApprovalService
 				$tasks[] = $task;
 
 				//发送待办消息
-				if ($index === 0) {
+				if ($index === 0 && $task->approver_id !== ApprovalVendor::UNDETERMINED_USER) {
 					$this->sendApprovalTodoNotification($task, $approvable);
 				}
 
@@ -569,8 +694,10 @@ class ApprovalService
 
 				$tasks[] = $task;
 
-				//发送待办消息
-				$this->sendApprovalTodoNotification($task, $approvable);
+				if ($task->approver_id !== ApprovalVendor::UNDETERMINED_USER) {
+					//发送待办消息
+					$this->sendApprovalTodoNotification($task, $approvable);
+				}
 			}
 		}
 
@@ -605,7 +732,7 @@ class ApprovalService
 			$approver_type = match ($node->approver_type) {
 				ApproverTypes::DesignatedDepartment => Department::class,
 				ApproverTypes::DesignatedRole => Role::class,
-				ApproverTypes::DesignatedUser => User::class,
+				ApproverTypes::DesignatedUser, ApproverTypes::CustomizeUser => User::class,
 			};
 			$approver_id = $node->approver_id;
 		}

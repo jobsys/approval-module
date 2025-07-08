@@ -31,6 +31,6 @@ if (!function_exists('approval_status_options')) {
 			ApprovalStatus::Approved => '审核通过',
 			ApprovalStatus::Rejected => '审核驳回',
 		];
-		return $status_map[$status] ?? '未知状态';
+		return $status_map[$status] ?? '';
 	}
 }

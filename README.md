@@ -3,6 +3,7 @@
 该模块提供了基础的审核流程定义，审核流程实例，审核流程任务，审核流程任务实例，审核流程任务实例记录等功能。
 
 ## 模块安装
+
 ```bash
 
 # 安装依赖
@@ -52,18 +53,18 @@ php artisan module:enable Approval && php artisan module:publish-migration Appro
 
    > 更推荐使用 `Event/Listener` 的方式创建审核任务，对于原业务流程侵入性更低，且可以在 `Listener` 中处理多种事件，其流程如下：
 
-    1. 在 `app/Events` 目录下创建 `ProjectCreated.php` 事件类
+	1. 在 `app/Events` 目录下创建 `ProjectCreated.php` 事件类
 
-    2. 在 `app/Listeners` 目录下创建 `ProjectCreatedListener.php` 监听类并创建审核任务
+	2. 在 `app/Listeners` 目录下创建 `ProjectCreatedListener.php` 监听类并创建审核任务
 
-    3. 在 `app/Providers/EventServiceProvider.php` 中注册事件和监听类
+	3. 在 `app/Providers/EventServiceProvider.php` 中注册事件和监听类
 
-    4. 在业务逻辑中触发事件，如下：
+	4. 在业务逻辑中触发事件，如下：
 
-       ```php
-       $project = Project::find(1);
-       ProjectCreated::dispatch($project);
-       ```
+	   ```php
+	   $project = Project::find(1);
+	   ProjectCreated::dispatch($project);
+	   ```
 
 4. 使用 `Modules\Approval\Services\ApprovalService` 中的 `getUserApprovable` 获取用户的审核任务，如下：
 
@@ -72,12 +73,13 @@ php artisan module:enable Approval && php artisan module:publish-migration Appro
        return $query->where('name', 'like', '%' . $name . '%');
    })
    
-   $pagination = $service->getUserApprovable($query, $this->login_user, $process, $approval_status)->paginate();
+   $pagination = $service->getUserApprovable($query, auth()->user(), $process, $approval_status)->paginate();
    ```
 
    > $query 参数是一个 Approvable Model 的查询对象，可以使用 with, where 等方法进行查询，进行业务处理后返回。
 
-5. 在前端引入 `Modules\Approval\Resources\views\web\components\ApprovalBox.vue`，其中已经封装了 `审核功能`，该组件接收三个参数:
+5. 在前端引入 `Modules\Approval\Resources\views\web\components\ApprovalBox.vue`，其中已经封装了 `审核功能`
+   ，该组件接收三个参数:
 
    ```js
    defineProps({
@@ -166,69 +168,69 @@ web/components/ApprovalBox.vue        # 审核组件，整合了审核操作，�
 
 + **`ApprovalService`**
 
-    - `createApprovalTask` 创建审核任务
+	- `createApprovalTask` 创建审核任务
 
-      ```php
-      /**
-      * 创建审核任务
-      * @param Model $approvable
-      * @param array $config
-      * @return array
-      */
-      public function createApprovalTask(Model $approvable, array $config): array
-      ```
+	  ```php
+	  /**
+	  * 创建审核任务
+	  * @param Model $approvable
+	  * @param array $config
+	  * @return array
+	  */
+	  public function createApprovalTask(Model $approvable, array $config): array
+	  ```
 
-    - `getUserApprovable` 获取用户的审核任务
+	- `getUserApprovable` 获取用户的审核任务
 
-      ```php
-      /**
-      * 获取用户待审核的审核对象
-      * @param Builder $builder
-      * @param User $user
-      * @param ApprovalProcess $process
-      * @param string $status
-      * @return Builder
-      */
-      public function getUserApprovable(Builder $builder, User $user, ApprovalProcess $process, string $status = ''): Builder
-      ```
+	  ```php
+	  /**
+	  * 获取用户待审核的审核对象
+	  * @param Builder $builder
+	  * @param User $user
+	  * @param ApprovalProcess $process
+	  * @param string $status
+	  * @return Builder
+	  */
+	  public function getUserApprovable(Builder $builder, User $user, ApprovalProcess $process, string $status = ''): Builder
+	  ```
 
-    - `approve` 审核
+	- `approve` 审核
 
-      ```php
-      /**
-      * 审核
-      * @param User $user
-      * @param Model $approvable
-      * @param ApprovalProcess $process
-      * @param string $approval_status
-      * @param string $approval_comment
-      * @param bool $is_snapshot
-      * @return array
-      */
-      public function approve(User $user, Model $approvable, ApprovalProcess $process, string $approval_status, string $approval_comment = '', bool $is_snapshot = false): array
-      ```
+	  ```php
+	  /**
+	  * 审核
+	  * @param User $user
+	  * @param Model $approvable
+	  * @param ApprovalProcess $process
+	  * @param string $approval_status
+	  * @param string $approval_comment
+	  * @param bool $is_snapshot
+	  * @return array
+	  */
+	  public function approve(User $user, Model $approvable, ApprovalProcess $process, string $approval_status, string $approval_comment = '', bool $is_snapshot = false): array
+	  ```
 
-    - `getUserApprovableTask` 获取当前用户对于某个审核对象的审核任务
+	- `getUserApprovableTask` 获取当前用户对于某个审核对象的审核任务
 
-      ```php
-      /**
-      * 获取当前用户对于某个审核对象的审核任务
-      * @param User $user
-      * @param ApprovalProcess $process
-      * @param Model $approvable
-      * @return ApprovalTask|null
-      */
-      public function getUserApprovableTask(User $user, ApprovalProcess $process, Model $approvable): ApprovalTask|null
-      ```
+	  ```php
+	  /**
+	  * 获取当前用户对于某个审核对象的审核任务
+	  * @param User $user
+	  * @param ApprovalProcess $process
+	  * @param Model $approvable
+	  * @return ApprovalTask|null
+	  */
+	  public function getUserApprovableTask(User $user, ApprovalProcess $process, Model $approvable): ApprovalTask|null
+	  ```
 
-    - `getApprovalDetail` 为审核对象添加审核历史和详情
+	- `getApprovalDetail` 为审核对象添加审核历史和详情
 
-      ```php
-      /**
-      * 为审核对象添加审核历史和详情
-      * @param ApprovalProcess $process
-      * @param Model $approvable
-      * @return void
-      */
-      public function getApprovalDetail(ApprovalProcess $process, Model $approvable): void
-      ```
+	  ```php
+	  /**
+	  * 为审核对象添加审核历史和详情
+	  * @param ApprovalProcess $process
+	  * @param Model $approvable
+	  * @return void
+	  */
+	  public function getApprovalDetail(ApprovalProcess $process, Model $approvable): void
+	  ```

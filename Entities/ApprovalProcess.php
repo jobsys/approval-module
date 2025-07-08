@@ -9,20 +9,20 @@ use Modules\Starter\Traits\Filterable;
 class ApprovalProcess extends BaseModel
 {
 
-    use Filterable;
+	use Filterable;
 
-    protected $model_name = "审核流程";
+	protected $model_name = "审核流程";
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
+	protected $casts = [
+		'is_active' => 'boolean',
+	];
 
-    protected $accessors = [
-        'created_at' => 'datetime',
-    ];
+	protected $accessors = [
+		'created_at' => 'datetime',
+	];
 
-    public function nodes(): HasMany
-    {
-        return $this->hasMany(ApprovalProcessNode::class);
-    }
+	public function nodes(): HasMany
+	{
+		return $this->hasMany(ApprovalProcessNode::class);
+	}
 }

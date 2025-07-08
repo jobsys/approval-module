@@ -34,7 +34,7 @@ class ApproveTodo extends Notification implements shouldQueue
 	{
 		return [
 			'url' => $this->approvable->getApproveUrl(),
-			'title' => "待审核 - {$this->approvable->getApprovableType()}",
+			'title' => "待审核 - {$this->approvable::getApprovableType()}",
 			'message' => "{$this->approvable->getApproveTodoMessage()}"
 		];
 	}

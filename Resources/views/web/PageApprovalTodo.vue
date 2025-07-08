@@ -1,11 +1,11 @@
 <template>
-	<div class="mb-4 shadow rounded-lg" v-for="approvable in approvables" :key="approvable.slug">
-		<a-card :title="approvable.name">
+	<div class="mb-4 hover-card" v-for="approvable in approvables" :key="approvable.slug">
+		<a-card :title="approvable.name" size="small">
 			<a-row :gutter="16" wrap>
 				<a-col :xxl="4" :xl="6" :lg="8" :md="12" :xs="24" hoverable v-for="item in approvable.children" :key="item.name">
 					<a-card
-						class="mb-4 shadow"
-						:class="[item.count ? 'border-2 border-orange-400' : 'bg-gray-100']"
+						class="mb-4! shadow hover:shadow-lg!"
+						:class="[item.count ? 'border-2! border-orange-400!' : 'bg-gray-100!']"
 						hoverable
 						@click="onChangeType(item)"
 					>

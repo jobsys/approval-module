@@ -11,4 +11,5 @@ enum ApproverTypes: string
 	const DesignatedDepartment = 'designated-department'; //指定部门
 	const DesignatedRole = 'designated-role'; //指定角色
 	const DesignatedUser = 'designated-user'; //指定用户
+	const CustomizeUser = 'customize-user'; //手动指定
 }

@@ -10,4 +10,5 @@ enum ApprovalStatus: string
 	const Rejected = 'rejected'; //审核驳回
 	const Skipped = 'skipped'; //审核跳过
 	const Updated = 'updated'; //审核对象已更新
+	const Reset = 'reset'; //审核流程重置
 }

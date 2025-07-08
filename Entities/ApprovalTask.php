@@ -9,44 +9,47 @@ use Modules\Starter\Entities\BaseModel;
 
 class ApprovalTask extends BaseModel
 {
-    protected $guarded = [];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-        'approved_at' => 'datetime',
-    ];
+	protected $model_name = '审核任务';
 
-    protected $accessors = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'approved_at' => 'datetime',
-    ];
+	protected $guarded = [];
 
-    //审核者
-    public function approver(): MorphTo
-    {
-        return $this->morphTo();
-    }
+	protected $casts = [
+		'is_active' => 'boolean',
+		'approved_at' => 'datetime',
+	];
 
-    public function executor()
-    {
-        return $this->belongsTo(User::class, 'approve_user_id', 'id');
-    }
+	protected $accessors = [
+		'created_at' => 'datetime',
+		'updated_at' => 'datetime',
+		'approved_at' => 'datetime',
+	];
 
-    public function approvable(): MorphTo
-    {
-        return $this->morphTo();
-    }
+	//审核者
+	public function approver(): MorphTo
+	{
+		return $this->morphTo();
+	}
 
-    public function process(): BelongsTo
-    {
-        return $this->belongsTo(ApprovalProcess::class);
-    }
+	public function executor()
+	{
+		return $this->belongsTo(User::class, 'approve_user_id', 'id');
+	}
 
-    public function node(): BelongsTo
-    {
-        return $this->belongsTo(ApprovalProcessNode::class);
-    }
+	public function approvable(): MorphTo
+	{
+		return $this->morphTo();
+	}
+
+	public function process(): BelongsTo
+	{
+		return $this->belongsTo(ApprovalProcess::class);
+	}
+
+	public function node(): BelongsTo
+	{
+		return $this->belongsTo(ApprovalProcessNode::class, 'approval_process_node_id', 'id');
+	}
 
 
 }

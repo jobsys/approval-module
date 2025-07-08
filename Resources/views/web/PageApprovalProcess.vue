@@ -1,7 +1,7 @@
 <template>
 	<a-button type="primary" @click="() => (state.showProcessModal = true)" :icon="h(SubnodeOutlined)">设置审核流程 </a-button>
 	<a-divider></a-divider>
-	<a-alert message="未绑定审核流程的业务将不会被审核" type="warning" show-icon class="mb-4" />
+	<a-alert message="未绑定审核流程的业务将不会被审核" type="warning" show-icon class="mb-4!" />
 	<a-table :columns="state.bindingColumns" :pagination="false" :scroll="{ y: 400 }" :data-source="state.bindingData">
 		<template #bodyCell="{ column, record }">
 			<div v-if="column.dataIndex === 'auto_approve'">
@@ -53,7 +53,7 @@
 		</NewbieTable>
 	</NewbieModal>
 
-	<NewbieModal v-model:visible="state.showEditorModal" title="审核流程编辑" :width="1000">
+	<NewbieModal v-model:visible="state.showEditorModal" title="审核流程编辑" :width="1000" @close="closeEditor">
 		<div class="px-60">
 			<a-steps :current="state.currentStep" class="!my-8">
 				<a-step title="流程信息" />
@@ -74,7 +74,7 @@
 
 		<a-card v-if="state.currentStep === 1">
 			<a-steps :current="state.currentNodeStep">
-				<a-step v-for="(node, idx) in state.processForm.nodes" :key="idx">
+				<a-step v-for="(node, idx) in state.processForm.nodes" :key="idx" @click="onEditNode(idx)">
 					<template #subTitle>
 						<a-avatar :size="64" style="background-color: #87d068">
 							<template #icon>
@@ -83,7 +83,7 @@
 						</a-avatar>
 						<br />
 						<span>{{ node.name }}</span>
-						<a-button shape="circle" size="small" danger style="margin: 10px 0 10px 5px" @click="onDeleteNode(idx)">
+						<a-button shape="circle" size="small" danger style="margin: 10px 0 10px 5px" @click.stop="onDeleteNode(idx)">
 							<template #icon>
 								<DeleteOutlined></DeleteOutlined>
 							</template>
@@ -111,8 +111,8 @@
 		</a-card>
 	</NewbieModal>
 
-	<a-modal title="添加审核节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
-		<a-form :model="state.currentNode" :label-col="{ span: 4 }" @finish="onAddNode">
+	<a-modal title="编辑审核节点" v-model:open="state.showNodeEditor" :width="800" :footer="null" destroy-on-close>
+		<a-form :model="state.currentNode" :label-col="{ span: 4 }" @finish="onSubmitNode">
 			<a-form-item label="审核节点名称" name="name" required :rules="{ required: true, message: '请填写审核节点名称', trigger: 'blur' }">
 				<a-input v-model:value="state.currentNode.name" placeholder="请填写审核节点名称"></a-input>
 			</a-form-item>
@@ -120,6 +120,10 @@
 				<template #help>
 					<div>“本部门” 表示审核内容所属部门中有审核权限的成员均可审核当前内容</div>
 					<div>“上级部门” 表示该部门的直属上级部门中有审核权限的成员均可以审核当前内容</div>
+					<div>“指定部门” 表示仅指定的部门中有审核权限的成员均可以审核当前内容</div>
+					<div>“指定角色” 表示仅指定角色中有审核权限的成员可以审核当前内容</div>
+					<div>“指定用户” 表示仅指定用户可以审核当前内容</div>
+					<div>“手动指定” 表示根据业务手动进行分配审核人员</div>
 				</template>
 				<a-radio-group
 					v-model:value="state.currentNode.approver_type"
@@ -280,35 +284,33 @@ const onCloseProcessModal = () => {
 	router.reload({ only: ["processOptions"] })
 }
 
-const getForm = () => {
-	return [
-		{
-			key: "name",
-			title: "审核流程名称",
-			required: true,
-		},
-		{
-			key: "subsequent_action",
-			title: "后续节点权限",
-			type: "radio",
-			options: props.subsequentActionOptions,
-			required: true,
-			defaultValue: "invisible",
-			tips: "不可见：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容\n可见不可审核：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容但无法审核\n可见可审核：该审核内容对后续节点可见，并可被审核",
-		},
-		{
-			key: "is_active",
-			title: "是否启用",
-			type: "switch",
-			defaultValue: true,
-		},
-		{
-			key: "remark",
-			title: "备注",
-			type: "textarea",
-		},
-	]
-}
+const getForm = () => [
+	{
+		key: "name",
+		title: "审核流程名称",
+		required: true,
+	},
+	{
+		key: "subsequent_action",
+		title: "后续节点权限",
+		type: "radio",
+		options: props.subsequentActionOptions,
+		required: true,
+		defaultValue: "invisible",
+		tips: "不可见：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容\n可见不可审核：在当前节点未审核通过之前，后续节点的审核者无法查看到该审核内容但无法审核\n可见可审核：该审核内容对后续节点可见，并可被审核",
+	},
+	{
+		key: "is_active",
+		title: "是否启用",
+		type: "switch",
+		defaultValue: true,
+	},
+	{
+		key: "remark",
+		title: "备注",
+		type: "textarea",
+	},
+]
 
 const onEdit = (item) => {
 	state.currentStep = 0
@@ -418,11 +420,23 @@ const onDelete = (item) => {
 	)
 }
 
-const onAddNode = () => {
-	state.processForm.nodes.push(state.currentNode)
-	state.currentNodeStep += 1
+const onSubmitNode = () => {
+	debugger
+	if (state.currentNodeStep > -1) {
+		state.processForm.nodes[state.currentNodeStep] = state.currentNode
+	} else {
+		state.processForm.nodes.push(state.currentNode)
+		state.currentNodeStep += 1
+	}
+
 	state.showNodeEditor = false
 }
+
+const onEditNode = (idx) => {
+	state.currentNodeStep = idx
+	onOpenNodeEditor(state.processForm.nodes[idx])
+}
+
 const onDeleteNode = (idx) => {
 	const modal = useModalConfirm(
 		`您确认要删除该审核节点吗？`,
@@ -434,14 +448,16 @@ const onDeleteNode = (idx) => {
 	)
 }
 
-const onOpenNodeEditor = () => {
-	state.currentNode = cloneDeep(defaultNode)
+const onOpenNodeEditor = (node) => {
+	//如果是新增加节点，先把当前节点置为默认值，为了区别于编辑节点
+	if (!node) {
+		state.currentNodeStep = -1
+	}
+	state.currentNode = node || cloneDeep(defaultNode)
 	state.showNodeEditor = true
 }
 
-const filterOption = (input, option) => {
-	return option.label.toLowerCase().indexOf(input) >= 0
-}
+const filterOption = (input, option) => option.label.toLowerCase().indexOf(input) >= 0
 
 const fetchUser = debounce((value) => {
 	state.isUserLoading = true
@@ -456,76 +472,74 @@ const fetchUser = debounce((value) => {
 		})
 }, 300)
 
-const columns = () => {
-	return [
-		{
-			title: "审核流程名称",
-			width: 200,
-			dataIndex: "name",
-			filterable: "input",
+const columns = () => [
+	{
+		title: "审核流程名称",
+		width: 200,
+		dataIndex: "name",
+		filterable: "input",
+	},
+	{
+		title: "后续节点权限",
+		width: 200,
+		key: "subsequent_action",
+		customRender({ record }) {
+			return h("span", {}, find(props.subsequentActionOptions, { value: record.subsequent_action })?.label)
 		},
-		{
-			title: "后续节点权限",
-			width: 200,
-			key: "subsequent_action",
-			customRender({ record }) {
-				return h("span", {}, find(props.subsequentActionOptions, { value: record.subsequent_action })?.label)
-			},
+	},
+	{
+		title: "是否启用",
+		key: "is_active",
+		width: 80,
+		customRender({ record }) {
+			return useTableActions({
+				type: "a-tag",
+				name: record.is_active ? "启用" : "关闭",
+				props: { color: record.is_active ? "green" : "red" },
+			})
 		},
-		{
-			title: "是否启用",
-			key: "is_active",
-			width: 80,
-			customRender({ record }) {
-				return useTableActions({
-					type: "a-tag",
-					name: record.is_active ? "启用" : "关闭",
-					props: { color: record.is_active ? "green" : "red" },
-				})
-			},
-		},
-		{
-			title: "创建时间",
-			width: 200,
-			dataIndex: "created_at",
-		},
+	},
+	{
+		title: "创建时间",
+		width: 200,
+		dataIndex: "created_at",
+	},
 
-		{
-			title: "备注",
-			width: 120,
-			dataIndex: "remark",
-			ellipsis: true,
-		},
-		{
-			title: "操作",
-			width: 160,
-			key: "operation",
-			fixed: "right",
-			customRender({ record }) {
-				return useTableActions([
-					{
-						name: "编辑",
-						props: {
-							icon: h(EditOutlined),
-							size: "small",
-						},
-						action() {
-							onEdit(record)
-						},
+	{
+		title: "备注",
+		width: 120,
+		dataIndex: "remark",
+		ellipsis: true,
+	},
+	{
+		title: "操作",
+		width: 160,
+		key: "operation",
+		fixed: "right",
+		customRender({ record }) {
+			return useTableActions([
+				{
+					name: "编辑",
+					props: {
+						icon: h(EditOutlined),
+						size: "small",
 					},
-					{
-						name: "删除",
-						props: {
-							icon: h(DeleteOutlined),
-							size: "small",
-						},
-						action() {
-							onDelete(record)
-						},
+					action() {
+						onEdit(record)
 					},
-				])
-			},
+				},
+				{
+					name: "删除",
+					props: {
+						icon: h(DeleteOutlined),
+						size: "small",
+					},
+					action() {
+						onDelete(record)
+					},
+				},
+			])
 		},
-	]
-}
+	},
+]
 </script>

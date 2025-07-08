@@ -26,10 +26,10 @@ class ApprovedNotification extends Notification
 	public function toDatabase($notifiable): array
 	{
 		return [
-			'title' => "{$this->approvable->getApprovableType()} 审核结果",
+			'title' => "{$this->approvable::getApprovableType()} 审核结果",
 			'message' => $this->approvable->approval_status === ApprovalStatus::Approved ?
-				"{$this->approvable->getApprovableType()} 审核通过" :
-				"{$this->approvable->getApprovableType()} 审核驳回， 驳回原因：{$this->approvable->approval_comment}"
+				"{$this->approvable::getApprovableType()} 审核通过" :
+				"{$this->approvable::getApprovableType()} 审核驳回， 驳回原因：{$this->approvable->approval_comment}"
 		];
 	}
 }

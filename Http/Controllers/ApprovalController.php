@@ -4,6 +4,7 @@ namespace Modules\Approval\Http\Controllers;
 
 use App\Http\Controllers\BaseManagerController;
 use App\Models\Department;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +15,7 @@ use Modules\Approval\Entities\ApprovalProcessNode;
 use Modules\Approval\Entities\ApprovalTask;
 use Modules\Approval\Enums\ApprovalStatus;
 use Modules\Approval\Enums\ApprovalSubsequentAction;
+use Modules\Approval\Enums\ApprovalVendor;
 use Modules\Approval\Enums\ApproverTypes;
 use Modules\Approval\Services\ApprovalService;
 use Modules\Permission\Entities\Role;
@@ -39,6 +41,7 @@ class ApprovalController extends BaseManagerController
 			['label' => '指定部门', 'value' => ApproverTypes::DesignatedDepartment],
 			['label' => '指定角色', 'value' => ApproverTypes::DesignatedRole],
 			['label' => '指定用户', 'value' => ApproverTypes::DesignatedUser],
+			['label' => '手动指定', 'value' => ApproverTypes::CustomizeUser],
 		];
 
 		$subsequent_action_options = [
@@ -50,7 +53,7 @@ class ApprovalController extends BaseManagerController
 		$binding_items = collect(config('approval.approvables'))->map(function ($item) {
 			$item['children'] = collect($item['children'])->map(function ($approval) {
 				$binding = ApprovalProcessBinding::where('approvable_type', $approval)->first();
-				$approval_type = app($approval)->getApprovableType();
+				$approval_type = $approval::getApprovableType();
 				return [
 					'key' => $approval_type,
 					'service_name' => $approval_type,
@@ -95,17 +98,17 @@ class ApprovalController extends BaseManagerController
 				/**
 				 * @var ApprovableTarget $approvable_entity
 				 */
-				$approvable_entity = app($approvable);
+				$approvable_entity = app($approvable::getApprovableClass());
 
-				if (!$this->login_user->can($approvable_entity->getApprovableAuth())) {
+				if (!auth()->user()->can($approvable_entity->getApprovableAuth())) {
 					continue;
 				}
 
 				$query = $approvalService->getUserApprovable($approvable_entity, [ApprovalStatus::Pending], [ApprovalSubsequentAction::Approve]);
 
 				$children[] = [
-					'name' => $approvable_entity->getApprovableType(),
-					'slug' => $approvable_entity->getModelSlug(),
+					'name' => $approvable_entity::getApprovableType(),
+					'slug' => $approvable_entity::getModelSlug(),
 					'approvable' => $approvable,
 					'count' => $query->count()
 				];
@@ -170,7 +173,7 @@ class ApprovalController extends BaseManagerController
 			ApprovalProcess::where('id', $input['id'])->update($input);
 			$process = ApprovalProcess::find($input['id']);
 		} else {
-			$input['creator_id'] = $this->login_user_id;
+			$input['creator_id'] = auth()->id();
 			$process = ApprovalProcess::create($input);
 		}
 
@@ -180,8 +183,11 @@ class ApprovalController extends BaseManagerController
 			unset($node['id']);
 			unset($node['updated_at']);
 			unset($node['created_at']);
+			if ($node['approver_type'] === ApproverTypes::CustomizeUser) {
+				$node['approver_id'] = ApprovalVendor::UNDETERMINED_USER;
+			}
 			$node['approval_process_id'] = $process->id;
-			$node['creator_id'] = $this->login_user_id;
+			$node['creator_id'] = auth()->id();
 			ApprovalProcessNode::create($node);
 		}
 
@@ -206,7 +212,7 @@ class ApprovalController extends BaseManagerController
 
 	}
 
-	public function taskItems(ApprovalService $approvalService,)
+	public function taskItems(ApprovalService $approvalService)
 	{
 		$slug = request()->input('slug');
 		$status = request()->input('status', false);
@@ -214,8 +220,8 @@ class ApprovalController extends BaseManagerController
 		$approvable = $approvalService->getApprovableBySlug($slug);
 
 
-		if (!$this->login_user->can($approvable->getApprovableAuth())) {
-			return $this->message("无{$approvable->getApprovableType()}审核权限");
+		if (!auth()->user()->can($approvable->getApprovableAuth())) {
+			return $this->message("无{$approvable::getApprovableType()}审核权限");
 		}
 
 		if ($status === 'pending') {
@@ -224,11 +230,43 @@ class ApprovalController extends BaseManagerController
 			$query = $approvalService->getUserApprovable($approvable, null, [ApprovalSubsequentAction::Approve, ApprovalSubsequentAction::Visible]);
 		}
 
-		$pagination = $query->latest()->paginate();
+		$pagination = $query->approval()->latest()->paginate();
 
 		$pagination->getCollection()->transform(fn($item) => $approvalService->wrapApprovable($item));
 
 		return $this->json($pagination);
+	}
+
+
+	public function taskReset(ApprovalService $service)
+	{
+
+		$approvable_slug = request('approvable_slug');
+		$approvable_id = request('approvable_id');
+
+		if (!$approvable_slug) {
+			return $this->message('审核对象类型不存在');
+		}
+
+		if (!$approvable_id) {
+			return $this->message('审核对象不存在');
+		}
+
+
+		$model = $service->getApprovableBySlug($approvable_slug);
+
+		/**
+		 * @var ApprovableTarget|Model $approvable
+		 */
+		$approvable = $model->where('id', $approvable_id)->first();
+
+		[, $error] = $service->resetApprovalTask($approvable);
+
+		if ($error) {
+			return $this->message($error);
+		}
+		return $this->json();
+
 	}
 
 	public function bindingEdit(Request $request)
@@ -320,6 +358,8 @@ class ApprovalController extends BaseManagerController
 
 		$model = $service->getApprovableBySlug($input['slug']);
 
+		$success_count = 0;
+
 		foreach ($input['ids'] as $id) {
 			/**
 			 * @var ApprovableTarget|Model $approvable
@@ -328,9 +368,99 @@ class ApprovalController extends BaseManagerController
 
 			[, $error] = $service->approve($approvable, $input['approval_status'], $input['approval_comment'] ?? '', $input['approval_remark'] ?? '');
 
+			if (!$error) {
+				$success_count += 1;
+			}
+
 			log_access('批量审核对象', $approvable);
+		}
+
+		return $this->json(['total_count' => count($input['ids']), 'success_count' => $success_count]);
+	}
+
+	public function customizeDetail()
+	{
+		$approval_process_id = request('approval_process_id');
+		$permission = request('permission');
+
+		$approval_process = ApprovalProcess::with(['nodes'])->find($approval_process_id, ['id', 'name']);
+
+		$nodes = $approval_process->nodes;
+
+		$approval_process->unsetRelation('nodes');
+
+		$node_options = $nodes->where('approver_type', ApproverTypes::CustomizeUser)->map(fn(ApprovalProcessNode $item) => [
+			'label' => $item->name,
+			'value' => $item->id,
+		])->values();
+
+		//只有有审核权限的用户
+		$user_options = User::whereHas('permissions', fn($query) => $query->where('name', $permission))
+			->orWhereHas('roles.permissions', fn($query) => $query->where('name', $permission))
+			->get(['id', 'name', 'nickname', 'work_num'])->map(fn($item) => [
+				'title' => $item->work_num ? "{$item->nickname}($item->work_num)" : $item->nickname,
+				'key' => strval($item->id),
+			])->values();
+
+		return $this->json([
+			'process' => $approval_process,
+			'nodeOptions' => $node_options,
+			'userOptions' => $user_options
+		]);
+
+
+	}
+
+	public function customizeAssign(ApprovalService $service)
+	{
+		list($input, $error) = land_form_validate(
+			request()->only(['node_id', 'slug', 'scope', 'method', 'user_ids', 'number']),
+			[
+				'node_id' => 'bail|required|numeric',
+				'slug' => 'bail|required|string',
+				'scope' => 'bail|required',
+				'method' => 'bail|required|string',
+				'user_ids' => 'bail|required|array',
+			], [
+				'node_id' => '审核节点',
+				'slug' => '审核对象',
+				'scope' => '数据范围',
+				'method' => '分配方式',
+				'user_ids' => '审核人员',
+			]
+		);
+
+		if ($error) {
+			return $this->message($error);
+		}
+
+		$model = $service->getApprovableBySlug($input['slug']);
+
+		$tasks = ApprovalTask::where('approval_process_node_id', $input['node_id'])
+			->where('approvable_type', get_class($model))
+			->where(function ($query) use ($input) {
+				if (is_array($input['scope']) && count($input['scope']) > 0) {
+					return $query->whereIn('approvable_id', $input['scope']);
+				}
+				return $query;
+			})->where('approver_type', User::class)
+			->where('status', ApprovalStatus::Pending)->get(['id'])->pluck('id');
+
+		if ($input['method'] === 'avg') {
+			$chunk_size = ceil($tasks->count() / count($input['user_ids']));
+		} else {
+			$chunk_size = $input['number'];
+		}
+		//$tasks 按 user_ids 每个人分配 $chunk_size 个任务
+		$chunks = $tasks->chunk($chunk_size)->toArray();
+		foreach ($input['user_ids'] as $index => $user_id) {
+			if (!isset($chunks[$index])) {
+				break;
+			}
+			ApprovalTask::whereIn('id', $chunks[$index])->update(['approver_id' => $user_id]);
 		}
 
 		return $this->json();
 	}
+
 }

@@ -18,7 +18,10 @@ Route::prefix("manager/approval")->name("api.manager.approval.")->group(function
 	Route::get('/process/{id}', 'ApprovalController@processItem')->where('id', '[0-9]+')->name('process.item');
 	Route::post('/process/delete', 'ApprovalController@processDelete')->name('process.delete');
 	Route::get('/task', 'ApprovalController@taskItems')->name('task.items');
+	Route::post('/task/reset', 'ApprovalController@taskReset')->name('task.reset');
 	Route::post('/binding', 'ApprovalController@bindingEdit')->name('binding.edit');
 	Route::post('/approve', 'ApprovalController@approve')->name('approve');
 	Route::post('/approve/batch', 'ApprovalController@batchApprove')->name('approve.batch');
+	Route::get('/customize/detail', 'ApprovalController@customizeDetail')->name('customize.detail');
+	Route::post('/customize/assign', 'ApprovalController@customizeAssign')->name('customize.assign');
 });
