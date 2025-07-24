@@ -19,8 +19,8 @@ use Modules\Approval\Enums\ApprovalStatus;
 use Modules\Approval\Enums\ApprovalSubsequentAction;
 use Modules\Approval\Enums\ApprovalVendor;
 use Modules\Approval\Enums\ApproverTypes;
-use Modules\Approval\Notifications\ApprovedNotification;
-use Modules\Approval\Notifications\ApproveTodo;
+use Modules\Approval\Messages\ApprovedMessage;
+use Modules\Approval\Messages\ApproveTodo;
 use Modules\Permission\Entities\Role;
 use Modules\Permission\Traits\Authorisations;
 use Modules\Starter\Entities\BaseModel;
@@ -408,7 +408,7 @@ class ApprovalService
 				}
 				//通知发起者
 				if ($initiator = $approvable->getInitiator()) {
-					$initiator->notify(new ApprovedNotification($approvable));
+					$initiator->sendMessage(new ApprovedMessage($approvable));
 				}
 			} else {
 				if (array_key_exists('approval_status', $approvable->attributesToArray())) {
@@ -517,7 +517,7 @@ class ApprovalService
 
 			//通知发起者
 			if ($initiator = $approvable->getInitiator()) {
-				$initiator->notify(new ApprovedNotification($approvable));
+				$initiator->sendMessage(new ApprovedMessage($approvable));
 			}
 
 			// 审核后置任务
@@ -633,16 +633,16 @@ class ApprovalService
 		return;
 
 		if ($task->approver_type === User::class) {
-			$task->approver?->notify(new ApproveTodo($task, $approvable));
+			$task->approver?->sendMessage(new ApproveTodo($task, $approvable));
 		} else if ($task->approver_type === Department::class) {
 			$users = $task->approver->users;
 			foreach ($users as $user) {
-				$user->notify(new ApproveTodo($task, $approvable));
+				$user->sendMessage(new ApproveTodo($task, $approvable));
 			}
 		} else if ($task->approver_type === Role::class) {
 			$users = $task->approver->users;
 			foreach ($users as $user) {
-				$user->notify(new ApproveTodo($task, $approvable));
+				$user->sendMessage(new ApproveTodo($task, $approvable));
 			}
 		}
 	}
